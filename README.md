@@ -51,9 +51,9 @@ I started with a few libraries based on what I had seen other people use (`-lcur
 
 The repository includes an example workflow that builds on Windows using
 [msys2/setup-msys2](https://github.com/msys2/setup-msys2). The workflow installs
-`mingw-w64-x86_64-gcc` and `mingw-w64-x86_64-curl` via `pacman` and then runs the
-build inside the msys2 environment. You can see the exact steps in
-`.github/workflows/build.yml`.
+`mingw-w64-x86_64-gcc` and `mingw-w64-x86_64-curl` via `pacman`. It then runs the
+build inside the msys2 environment and prepends the Go installation to the shell
+`PATH`. You can see the exact steps in `.github/workflows/build.yml`.
 
 ## Certificates
 
