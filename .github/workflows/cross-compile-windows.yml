@@ -44,61 +44,48 @@ jobs:
           CURL_URL="https://curl.se/windows/dl-${CURL_VERSION}/curl-${CURL_VERSION}-win64-mingw.zip"
           
           echo "Attempting to download prebuilt curl for Windows..."
-          if curl -L -f -o "curl-win64-mingw.zip" "$CURL_URL"; then
+          if curl -L -f --retry 3 --retry-delay 5 -o "curl-win64-mingw.zip" "$CURL_URL"; then
             echo "Downloaded prebuilt curl for Windows"
             unzip -q curl-win64-mingw.zip
             CURL_DIR=$(find . -maxdepth 1 -type d -name "curl-*" | head -1)
-            echo "CURL_PREFIX=/tmp/curl-windows/$CURL_DIR" >> $GITHUB_ENV
+            if [ -n "$CURL_DIR" ]; then
+              echo "CURL_PREFIX=/tmp/curl-windows/$CURL_DIR" >> $GITHUB_ENV
+              echo "CURL_METHOD=prebuilt" >> $GITHUB_ENV
+            else
+              echo "Error: Could not find extracted curl directory"
+              exit 1
+            fi
           else
             echo "Failed to download prebuilt curl, building from source..."
             
             # Build curl from source for Windows
-            CURL_SRC_VERSION="8.11.1"
-            curl -L -o "curl-${CURL_SRC_VERSION}.tar.gz" "https://curl.se/download/curl-${CURL_SRC_VERSION}.tar.gz"
-            tar -xzf "curl-${CURL_SRC_VERSION}.tar.gz"
-            cd "curl-${CURL_SRC_VERSION}"
-            
-            # Install Windows SSL/crypto libraries
-            sudo apt-get install -y mingw-w64-tools
-            
-            # Configure curl for Windows cross-compilation
-            ./configure \
-              --host=x86_64-w64-mingw32 \
-              --prefix="/tmp/curl-windows/curl-win64" \
-              --enable-static \
-              --disable-shared \
-              --without-ssl \
-              --without-libssl-prefix \
-              --disable-ldap \
-              --disable-ldaps \
-              --disable-rtsp \
-              --disable-dict \
-              --disable-telnet \
-              --disable-tftp \
-              --disable-pop3 \
-              --disable-imap \
-              --disable-smb \
-              --disable-smtp \
-              --disable-gopher \
-              --disable-manual
-            
-            make -j$(nproc)
-            make install
+            ${GITHUB_WORKSPACE}/scripts/build-curl-windows.sh /tmp/curl-windows /tmp/curl-windows/curl-win64
             
             echo "CURL_PREFIX=/tmp/curl-windows/curl-win64" >> $GITHUB_ENV
+            echo "CURL_METHOD=source" >> $GITHUB_ENV
           fi
 
       - name: Cross-compile for Windows
         run: |
-          echo "Using curl from: $CURL_PREFIX"
+          echo "Using curl from: $CURL_PREFIX (method: $CURL_METHOD)"
           
           # Verify curl installation
-          ls -la "$CURL_PREFIX"
-          if [ -d "$CURL_PREFIX/include" ]; then
-            ls -la "$CURL_PREFIX/include"
-          fi
-          if [ -d "$CURL_PREFIX/lib" ]; then
-            ls -la "$CURL_PREFIX/lib"
+          if [ -d "$CURL_PREFIX" ]; then
+            echo "Curl directory contents:"
+            ls -la "$CURL_PREFIX"
+            
+            if [ -d "$CURL_PREFIX/include" ]; then
+              echo "Include directory:"
+              ls -la "$CURL_PREFIX/include"
+            fi
+            
+            if [ -d "$CURL_PREFIX/lib" ]; then
+              echo "Library directory:"
+              ls -la "$CURL_PREFIX/lib"
+            fi
+          else
+            echo "Error: Curl prefix directory not found: $CURL_PREFIX"
+            exit 1
           fi
           
           # Set up cross-compilation environment
@@ -112,10 +99,11 @@ jobs:
           export CGO_CFLAGS="-I${CURL_PREFIX}/include -DCURL_STATICLIB"
           
           # Set up libraries for static linking
-          if [ -d "${CURL_PREFIX}/lib" ]; then
+          if [ -d "${CURL_PREFIX}/lib" ] && [ -f "${CURL_PREFIX}/lib/libcurl.a" ]; then
             export CGO_LDFLAGS="-L${CURL_PREFIX}/lib -lcurl -lws2_32 -lcrypt32 -luser32 -lkernel32"
           else
-            export CGO_LDFLAGS="-lcurl -lws2_32 -lcrypt32 -luser32 -lkernel32"
+            echo "Warning: Static curl library not found, using system linking"
+            export CGO_LDFLAGS="-lws2_32 -lcrypt32 -luser32 -lkernel32"
           fi
           
           echo "Cross-compilation environment:"
@@ -131,8 +119,14 @@ jobs:
           go build -v -x -ldflags="-s -w" -o curltest.exe .
           
           # Verify the build
+          echo "Build completed successfully!"
           ls -la curltest.exe
           file curltest.exe
+
+      - name: Test Windows executable
+        run: |
+          # Run basic validation tests
+          ./scripts/test-windows-build.sh
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
