@@ -57,6 +57,116 @@ workflow captures the `GOROOT` from the Windows environment and prepends it to
 the msys2 shell `PATH` before running `go build`. You can see the exact steps in
 `.github/workflows/build.yml`.
 
+## Cross-compiling for Windows from Linux
+
+This repository also supports cross-compiling Windows binaries from a Linux environment. This can be useful for CI/CD pipelines or development environments where you want to build Windows executables without needing a Windows machine.
+
+### Prerequisites
+
+You'll need to install the MinGW-w64 cross-compiler and related tools:
+
+```bash
+# On Ubuntu/Debian:
+sudo apt-get update
+sudo apt-get install -y \
+    mingw-w64 \
+    build-essential \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    wget \
+    unzip
+```
+
+### Manual Cross-compilation
+
+The repository includes a cross-compilation script that handles the entire process:
+
+```bash
+./scripts/cross-compile-windows.sh
+```
+
+This script will:
+
+1. **Download curl for Windows**: Attempts to download pre-built curl libraries from [curl.se/windows](https://curl.se/windows/)
+2. **Fallback to building from source**: If download fails, builds curl from source using the MinGW-w64 cross-compiler
+3. **Set up environment**: Configures all necessary CGO environment variables for cross-compilation
+4. **Build the executable**: Produces a statically-linked `curltest.exe` for Windows
+
+### Manual Steps
+
+If you prefer to understand the process step-by-step:
+
+#### 1. Set up curl for Windows
+
+```bash
+# Create working directory
+mkdir -p /tmp/curl-windows && cd /tmp/curl-windows
+
+# Option A: Download prebuilt curl (if available)
+curl -L -o curl-win64-mingw.zip "https://curl.se/windows/dl-8.11.1_1/curl-8.11.1_1-win64-mingw.zip"
+unzip curl-win64-mingw.zip
+export CURL_PREFIX="/tmp/curl-windows/curl-8.11.1_1-win64-mingw"
+
+# Option B: Build curl from source (fallback)
+curl -L -o curl-8.11.1.tar.gz "https://curl.se/download/curl-8.11.1.tar.gz"
+tar -xzf curl-8.11.1.tar.gz
+cd curl-8.11.1
+
+./configure \
+    --host=x86_64-w64-mingw32 \
+    --prefix="/tmp/curl-windows/curl-win64" \
+    --enable-static \
+    --disable-shared \
+    --without-ssl \
+    --disable-ldap \
+    --disable-ldaps
+
+make -j$(nproc)
+make install
+export CURL_PREFIX="/tmp/curl-windows/curl-win64"
+```
+
+#### 2. Set up cross-compilation environment
+
+```bash
+export CC=x86_64-w64-mingw32-gcc
+export CXX=x86_64-w64-mingw32-g++
+export CGO_ENABLED=1
+export GOOS=windows
+export GOARCH=amd64
+export CGO_CFLAGS="-I${CURL_PREFIX}/include -DCURL_STATICLIB"
+export CGO_LDFLAGS="-L${CURL_PREFIX}/lib -lcurl -lws2_32 -lcrypt32 -luser32 -lkernel32"
+```
+
+#### 3. Build the application
+
+```bash
+go build -v -ldflags="-s -w" -o curltest.exe .
+```
+
+The resulting `curltest.exe` should be a statically-linked Windows executable that can run on Windows systems without requiring additional DLL files.
+
+#### Troubleshooting Cross-compilation
+
+- **Linker errors**: You may need to adjust the `CGO_LDFLAGS` to include additional Windows libraries depending on the curl build configuration
+- **Missing headers**: Ensure the curl headers are properly installed in the prefix directory
+- **SSL support**: The example above builds curl without SSL to simplify the cross-compilation. For SSL support, you'll need to cross-compile OpenSSL as well
+
+### GitHub Action for Cross-compilation
+
+The repository includes a GitHub Action workflow (`.github/workflows/cross-compile-windows.yml`) that automatically cross-compiles Windows binaries from Linux. This workflow:
+
+- Sets up a Linux environment with MinGW-w64 cross-compiler
+- Downloads or builds curl for Windows
+- Cross-compiles the application
+- Uploads the Windows executable as a build artifact
+
+This approach demonstrates how to set up cross-compilation entirely from a Linux environment without using pre-built actions, as requested in the issue.
+
 ## Certificates
 
 Depending on your libcurl build/configuration, there may not be any default certificates available. The test application lets you pass in a certificate store (`--certificates`) or will check the (relatively standard) environment variables `CURL_CA_BUNDLE` and `SSL_CERT_FILE`.
