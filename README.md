@@ -47,7 +47,7 @@ The last 2 CGO options were challenging to figure out. The discussion in [curl/c
 
 I started with a few libraries based on what I had seen other people use (`-lcurl -lssl -lcrypto -lz -lws2_32 -lcrypt32 -lbcrypt -lssl -lcrypto -luser32 -lkernel32`) and then added additional libraries based on linker errors and the most likely candidate in `c:\curl\lib`. `-lWldap32` was a little more challenging, but...now you know.
 
-You can also cross-compile from Linux. The `win-from-linux` director contains `Dockerfile` that sets up all of the needed dependencies (C cross-compiler, Go, libcurl), as well as a shell script `cross-vars.sh` that sets up the environment. You can then check out this project and `go build .` to produce a Windows .exe file.
+You can also cross-compile from Linux. The `win-from-linux` directory contains `Dockerfile` that sets up all of the needed dependencies (C cross-compiler, Go, libcurl), as well as a shell script `cross-vars.sh` that sets up the environment. You can then check out this project and `go build .` to produce a Windows .exe file.
 
 ### GitHub Actions
 
