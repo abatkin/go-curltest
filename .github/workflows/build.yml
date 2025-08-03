@@ -55,8 +55,9 @@ jobs:
           docker build -t go-curltest-cross .
       - name: Cross-compile for Windows
         run: |
-          docker run --rm -v "$(pwd):/workspace" go-curltest-cross bash -c "
+          docker run --rm -v "$(pwd):/workspace/go-curltest" go-curltest-cross bash -c "
             source cross-vars.sh && 
+            cd go-curltest &&
             go build -v -o curltest.exe .
           "
       - name: Upload Windows binary
