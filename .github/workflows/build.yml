@@ -58,6 +58,7 @@ jobs:
           docker run --rm -v "$(pwd):/workspace/go-curltest" go-curltest-cross bash -c "
             source cross-vars.sh && 
             cd go-curltest &&
+            git config --global --add safe.directory /workspace/go-curltest &&
             go build -v -o curltest.exe .
           "
       - name: Upload Windows binary
